@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+@theme {
+  --color-h-green: #008248;
+  --color-h-dark-green: #004d2b;
+  --color-h-red: #FF2B2B;
+  --color-h-gray-bg: #F4F4F4;
+  --color-h-text-dark: #333333;
+  --color-h-text-muted: #666666;
+
+  --radius-card: 12px;
+}
+
+@layer base {
+  body {
+    @apply bg-h-gray-bg text-h-text-dark;
+  }
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.line-chart-svg {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: dash 3s linear forwards;
+}
+
+.card-hover {
+  @apply transition-all duration-300 hover:shadow-md hover:-translate-y-1;
+}
