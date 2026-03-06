@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Star, Calendar, ChevronDown, LogOut, Key } from 'lucide-react';
-import Image from 'next/image';
+import { Star, LogOut, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface HeaderProps {
@@ -29,12 +28,6 @@ export function Header({ onLogout, onChangePassword, userName, userEmail }: Head
       </div>
 
       <div className="flex items-center gap-4 md:gap-8">
-        <div className="hidden md:flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-4 py-1.5 cursor-pointer hover:bg-white/10 transition-colors">
-          <Calendar className="h-[18px] w-[18px] opacity-70" />
-          <span className="text-xs font-medium">Jan 2024 - Jun 2024</span>
-          <ChevronDown className="h-[18px] w-[18px] opacity-40 ml-1" />
-        </div>
-
         <div className="flex items-center gap-4 relative">
           <div className="text-right">
             <p className="text-xs font-semibold leading-tight">{userName}</p>

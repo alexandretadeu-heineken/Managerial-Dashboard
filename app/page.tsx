@@ -2,6 +2,8 @@
 
 import React, { useState } from 'react';
 import { Header } from '@/components/Header';
+import { Sidebar } from '@/components/Sidebar';
+import { DateFilter } from '@/components/DateFilter';
 import { MetricCard } from '@/components/MetricCard';
 import { TrendCard } from '@/components/TrendCard';
 import { Footer } from '@/components/Footer';
@@ -17,6 +19,8 @@ export default function DashboardPage() {
   const [authState, setAuthState] = useState<AuthState>('login');
   const [user, setUser] = useState({ name: '', email: '' });
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState('dashboard');
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -73,34 +77,45 @@ export default function DashboardPage() {
   }
 
   return (
-    <>
-      <Header 
-        onLogout={handleLogout} 
-        onChangePassword={handleChangePassword} 
-        userName={user.name}
-        userEmail={user.email}
+    <div className="flex min-h-screen bg-h-gray-bg">
+      <Sidebar 
+        isCollapsed={isSidebarCollapsed} 
+        setIsCollapsed={setIsSidebarCollapsed} 
+        activeItem={activeTab}
       />
       
-      <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-8">
-        <div className="mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
-          <div className="w-full lg:w-auto">
-            <h2 className="text-xl sm:text-2xl font-bold text-h-text-dark tracking-tight">Análise de Performance de Processos</h2>
-            <p className="text-h-text-muted text-sm mt-1">Monitoramento de JOBs Managerial</p>
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <Header 
+          onLogout={handleLogout} 
+          onChangePassword={handleChangePassword} 
+          userName={user.name}
+          userEmail={user.email}
+        />
+        
+        <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-8 overflow-y-auto">
+          <div className="mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
+            <div className="w-full lg:w-auto">
+              <h2 className="text-xl sm:text-2xl font-bold text-h-text-dark tracking-tight">Análise de Performance de Processos</h2>
+              <p className="text-h-text-muted text-sm mt-1">Monitoramento de JOBs Managerial</p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto items-center">
+              {/* Functional Date Filter */}
+              <DateFilter onDateChange={(start, end) => console.log('Date changed:', start, end)} />
+
+              <button 
+                onClick={handleRefresh}
+                className="w-full sm:w-auto bg-h-green text-white px-5 py-2.5 rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                ATUALIZAR DADOS
+              </button>
+
+              <button className="w-full sm:w-auto bg-white px-5 py-2.5 rounded-full text-xs font-bold border border-gray-200 text-h-text-dark flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors shadow-sm">
+                <Download className="h-4 w-4" />
+                EXPORTAR RELATÓRIO
+              </button>
+            </div>
           </div>
-          <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-            <button className="w-full sm:w-auto bg-white px-5 py-2.5 rounded-full text-xs font-bold border border-gray-200 text-h-text-dark flex items-center justify-center gap-2 hover:bg-gray-50 transition-colors shadow-sm">
-              <Download className="h-4 w-4" />
-              EXPORTAR RELATÓRIO
-            </button>
-            <button 
-              onClick={handleRefresh}
-              className="w-full sm:w-auto bg-h-green text-white px-5 py-2.5 rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
-            >
-              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-              ATUALIZAR DADOS
-            </button>
-          </div>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
           {/* Column 1: Cross Allocation - Tax Incentives */}
@@ -209,7 +224,8 @@ export default function DashboardPage() {
         </div>
 
         <Footer />
-      </main>
-    </>
+        </main>
+      </div>
+    </div>
   );
 }
