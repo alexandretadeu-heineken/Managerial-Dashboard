@@ -5,8 +5,8 @@ import { Star } from 'lucide-react';
 
 export function Footer() {
   return (
-    <footer className="mt-12 py-6 border-t border-gray-200 flex flex-wrap items-center justify-between text-h-text-muted">
-      <div className="flex items-center gap-6">
+    <footer className="mt-12 py-6 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-4 text-h-text-muted">
+      <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 text-center sm:text-left">
         <div className="flex items-center gap-2">
           <div className="h-2 w-2 rounded-full bg-h-green"></div>
           <span className="text-[11px] font-bold uppercase tracking-widest">Sistemas Operacionais</span>

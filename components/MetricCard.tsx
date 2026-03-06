@@ -6,6 +6,7 @@ import { motion } from 'motion/react';
 
 interface MetricCardProps {
   title: string;
+  subtitle?: string;
   icon: LucideIcon;
   value: string;
   unit1: string;
@@ -20,6 +21,7 @@ interface MetricCardProps {
 
 export function MetricCard({
   title,
+  subtitle,
   icon: Icon,
   value,
   unit1,
@@ -40,7 +42,10 @@ export function MetricCard({
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-center gap-2">
           <Icon className={`h-5 w-5 ${iconColor}`} />
-          <h3 className="text-sm font-bold text-h-text-dark uppercase tracking-wider">{title}</h3>
+          <div>
+            <h3 className="text-sm font-bold text-h-text-dark uppercase tracking-wider">{title}</h3>
+            {subtitle && <p className="text-[10px] text-h-text-muted font-medium mt-0.5">{subtitle}</p>}
+          </div>
         </div>
         <span className={`text-[10px] ${statusColor} font-bold px-2 py-0.5 rounded-full`}>
           {status}
@@ -48,8 +53,8 @@ export function MetricCard({
       </div>
       <div className="space-y-1">
         <p className="text-h-text-muted text-[11px] font-semibold uppercase tracking-tighter">Tempo Médio Semestral</p>
-        <div className="flex items-baseline gap-3">
-          <span className="text-4xl font-light text-h-text-dark">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+          <span className="text-3xl sm:text-4xl font-light text-h-text-dark whitespace-nowrap">
             {value}<span className="text-xl font-bold">{unit1}</span> {value2}<span className="text-xl font-bold">{unit2}</span>
           </span>
           <div className={`flex items-center text-xs font-bold ${

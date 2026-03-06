@@ -8,8 +8,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'Executive Dashboard | Financial Operations',
-  description: 'Real-time monitoring of SLAs and operational trends.',
+  title: 'Managerial Dashboard | D&T AMS BR',
+  description: 'D&T AMS BR - Support Functions monitoring.',
 };
 
 export default function RootLayout({children}: {children: React.ReactNode}) {

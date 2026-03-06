@@ -54,20 +54,20 @@ export function TrendCard({
           <span>Jan</span><span>Mar</span><span>Jun</span>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
         <div className="p-4 bg-h-gray-bg/50 rounded-lg border border-gray-50">
           <div className="flex items-center gap-2 mb-2">
             <Calculator className="h-4 w-4 text-h-text-muted" />
             <span className="text-[10px] text-h-text-muted uppercase font-bold tracking-widest">Cálculo</span>
           </div>
-          <p className="text-xl font-semibold text-h-text-dark">{calcValue}</p>
+          <p className="text-lg sm:text-xl font-semibold text-h-text-dark">{calcValue}</p>
         </div>
         <div className="p-4 bg-h-gray-bg/50 rounded-lg border border-gray-50">
           <div className="flex items-center gap-2 mb-2">
             <LogOut className="h-4 w-4 text-h-text-muted rotate-90" />
             <span className="text-[10px] text-h-text-muted uppercase font-bold tracking-widest">Postagem</span>
           </div>
-          <p className="text-xl font-semibold text-h-text-dark">{postValue}</p>
+          <p className="text-lg sm:text-xl font-semibold text-h-text-dark">{postValue}</p>
         </div>
       </div>
     </motion.div>
