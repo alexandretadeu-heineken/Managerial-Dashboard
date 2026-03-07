@@ -135,7 +135,7 @@ export default function DashboardPage() {
         chartColor = '#008248';
       } else if (latest.processing_time_seconds > previous.processing_time_seconds) {
         trendType = 'up';
-        if (variation <= 10) {
+        if (variation <= 30) {
           status = 'ALERTA';
           statusColor = 'bg-orange-100 text-orange-600';
           chartColor = '#EA580C';
