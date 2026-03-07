@@ -10,6 +10,7 @@ import { Footer } from '@/components/Footer';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
+import { UsersView } from '@/components/UsersView';
 import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
@@ -19,10 +20,22 @@ type AuthState = 'login' | 'forgot-password' | 'change-password' | 'authenticate
 
 export default function DashboardPage() {
   const [authState, setAuthState] = useState<AuthState>('login');
-  const [user, setUser] = useState({ name: '', email: '' });
+  const [user, setUser] = useState({ name: '', email: '', role: 'user', id: '' });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+
+  useEffect(() => {
+    if (activeTab === 'users' && user.id) {
+      const refreshRole = async () => {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+        if (profile && profile.role !== user.role) {
+          setUser(prev => ({ ...prev, role: profile.role || 'user' }));
+        }
+      };
+      refreshRole();
+    }
+  }, [activeTab, user.id, user.role]);
   const [isInitializing, setIsInitializing] = useState(true);
   const [metrics, setMetrics] = useState<Record<string, ProcessMetric[]>>({});
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
@@ -56,7 +69,7 @@ export default function DashboardPage() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          handleLogin(session.user.email || '');
+          await handleLogin(session.user.email || '', session.user.id);
         }
       } catch (error) {
         console.error('Session check error:', error);
@@ -67,12 +80,12 @@ export default function DashboardPage() {
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        handleLogin(session.user.email || '');
+        await handleLogin(session.user.email || '', session.user.id);
       } else {
         setAuthState('login');
-        setUser({ name: '', email: '' });
+        setUser({ name: '', email: '', role: 'user', id: '' });
       }
     });
 
@@ -85,7 +98,7 @@ export default function DashboardPage() {
     setIsRefreshing(false);
   };
 
-  const handleLogin = (email: string) => {
+  const handleLogin = async (email: string, userId?: string) => {
     // Extract name from email (e.g., "john.doe@heineken.com" -> "John Doe")
     const namePart = email.split('@')[0];
     const name = namePart
@@ -93,14 +106,37 @@ export default function DashboardPage() {
       .map(part => part.charAt(0).toUpperCase() + part.slice(1))
       .join(' ');
     
-    setUser({ name, email });
+    let role = 'user';
+    if (userId) {
+      console.log('Verificando cargo para o usuário:', userId);
+      const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
+      
+      if (error && error.code === 'PGRST116') {
+        console.log('Perfil não encontrado, tentando criar...');
+        const { data: newProfile } = await supabase.from('profiles').insert([
+          { id: userId, email, full_name: name, role: email === 'atacomp.heineken@gmail.com' ? 'admin' : 'user' }
+        ]).select('role').single();
+        if (newProfile) role = newProfile.role || 'user';
+      } else if (profile) {
+        role = profile.role || 'user';
+      }
+      
+      // Override de segurança para o proprietário
+      if (email === 'atacomp.heineken@gmail.com') {
+        role = 'admin';
+      }
+      
+      console.log('Cargo identificado:', role);
+    }
+    
+    setUser({ name, email, role, id: userId || '' });
     setAuthState('authenticated');
   };
 
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
-      setUser({ name: '', email: '' });
+      setUser({ name: '', email: '', role: 'user', id: '' });
       setAuthState('login');
     } catch (error) {
       console.error('Logout error:', error);
@@ -299,6 +335,7 @@ export default function DashboardPage() {
         isCollapsed={isSidebarCollapsed} 
         setIsCollapsed={setIsSidebarCollapsed} 
         activeItem={activeTab}
+        onItemClick={setActiveTab}
       />
       
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
@@ -310,182 +347,188 @@ export default function DashboardPage() {
         />
         
         <main className="flex-1 w-full max-w-[1440px] mx-auto px-6 md:px-10 py-8 overflow-y-auto">
-          {Object.keys(metrics).length === 0 && !isLoadingMetrics && (
-            <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-800 text-sm">
-              <AlertCircle className="h-5 w-5" />
-              <p>
-                Nenhum dado encontrado no banco de dados. 
-                Certifique-se de executar as migrations no Supabase para visualizar os indicadores reais.
-              </p>
-            </div>
+          {activeTab === 'dashboard' ? (
+            <>
+              {Object.keys(metrics).length === 0 && !isLoadingMetrics && (
+                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-800 text-sm">
+                  <AlertCircle className="h-5 w-5" />
+                  <p>
+                    Nenhum dado encontrado no banco de dados. 
+                    Certifique-se de executar as migrations no Supabase para visualizar os indicadores reais.
+                  </p>
+                </div>
+              )}
+
+              <div className="mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
+                <div className="w-full lg:w-auto">
+                  <h2 className="text-xl sm:text-2xl font-bold text-h-text-dark tracking-tight">Análise de Performance de Processos</h2>
+                  <p className="text-h-text-muted text-sm mt-1">Monitoramento de JOBs Managerial</p>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto items-center">
+                  {/* Single Period Filter */}
+                  <SinglePeriodFilter onPeriodChange={handlePeriodChange} />
+
+                  <button 
+                    onClick={handleRefresh}
+                    className="w-full sm:w-auto bg-h-green text-white px-5 py-2.5 rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
+                  >
+                    <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                    ATUALIZAR DADOS
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
+                {/* Column 1: Cross Allocation - Tax Incentives (CA001/CA002) */}
+                <div className="space-y-6">
+                  <MetricCard 
+                    title="Cross Allocation"
+                    subtitle="Tax Incentives e ATL/BTL"
+                    icon={Network}
+                    realTimeValue={getCombinedMetricData('CA001', 'CA002').realH}
+                    realTimeUnit1="h"
+                    realTimeValue2={getCombinedMetricData('CA001', 'CA002').realM}
+                    realTimeUnit2="m"
+                    value={getCombinedMetricData('CA001', 'CA002').avgH}
+                    unit1="h"
+                    value2={getCombinedMetricData('CA001', 'CA002').avgM}
+                    unit2="m"
+                    trend={getCombinedMetricData('CA001', 'CA002').trendPercent}
+                    trendType={getCombinedMetricData('CA001', 'CA002').trendType}
+                    status={getCombinedMetricData('CA001', 'CA002').status}
+                    statusColor={getCombinedMetricData('CA001', 'CA002').statusColor}
+                    iconColor="text-h-green"
+                  />
+                  <TrendCard 
+                    title="TEMPO DE PROCESSAMENTO (HORAS)"
+                    chartColor={getCombinedMetricData('CA001', 'CA002').chartColor}
+                    gradientId="gradient-green-1"
+                    calcValue={metrics['CA001']?.[0] ? `${metrics['CA001'][0].processing_time_hours}h ${metrics['CA001'][0].processing_time_minutes}m` : "00h 00m"}
+                    postValue={metrics['CA002']?.[0] ? `${metrics['CA002'][0].processing_time_hours}h ${metrics['CA002'][0].processing_time_minutes}m` : "00h 00m"}
+                    periods={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => m.period)}
+                    timeLabels={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => {
+                      const h = Math.floor(m.processing_time_seconds / 3600);
+                      const min = Math.floor((m.processing_time_seconds % 3600) / 60);
+                      return `${h}h ${min}m`;
+                    })}
+                    values={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
+                  />
+                </div>
+
+                {/* Column 2: Cross Allocation - PL30 e EIA (CA003/CA004) */}
+                <div className="space-y-6">
+                  <MetricCard 
+                    title="Cross Allocation"
+                    subtitle="PL30 e EIA"
+                    icon={Network}
+                    realTimeValue={getCombinedMetricData('CA003', 'CA004').realH}
+                    realTimeUnit1="h"
+                    realTimeValue2={getCombinedMetricData('CA003', 'CA004').realM}
+                    realTimeUnit2="m"
+                    value={getCombinedMetricData('CA003', 'CA004').avgH}
+                    unit1="h"
+                    value2={getCombinedMetricData('CA003', 'CA004').avgM}
+                    unit2="m"
+                    trend={getCombinedMetricData('CA003', 'CA004').trendPercent}
+                    trendType={getCombinedMetricData('CA003', 'CA004').trendType}
+                    status={getCombinedMetricData('CA003', 'CA004').status}
+                    statusColor={getCombinedMetricData('CA003', 'CA004').statusColor}
+                    iconColor="text-h-green"
+                  />
+                  <TrendCard 
+                    title="TEMPO DE PROCESSAMENTO (HORAS)"
+                    chartColor={getCombinedMetricData('CA003', 'CA004').chartColor}
+                    gradientId="gradient-green-2"
+                    calcValue={metrics['CA003']?.[0] ? `${metrics['CA003'][0].processing_time_hours}h ${metrics['CA003'][0].processing_time_minutes}m` : "00h 00m"}
+                    postValue={metrics['CA004']?.[0] ? `${metrics['CA004'][0].processing_time_hours}h ${metrics['CA004'][0].processing_time_minutes}m` : "00h 00m"}
+                    periods={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => m.period)}
+                    timeLabels={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => {
+                      const h = Math.floor(m.processing_time_seconds / 3600);
+                      const min = Math.floor((m.processing_time_seconds % 3600) / 60);
+                      return `${h}h ${min}m`;
+                    })}
+                    values={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
+                  />
+                </div>
+
+                {/* Column 3: TDD (TDD01/TDD02) */}
+                <div className="space-y-6">
+                  <MetricCard 
+                    title="TDD"
+                    subtitle="TDD"
+                    icon={BarChart3}
+                    realTimeValue={getCombinedMetricData('TDD01', 'TDD02').realH}
+                    realTimeUnit1="h"
+                    realTimeValue2={getCombinedMetricData('TDD01', 'TDD02').realM}
+                    realTimeUnit2="m"
+                    value={getCombinedMetricData('TDD01', 'TDD02').avgH}
+                    unit1="h"
+                    value2={getCombinedMetricData('TDD01', 'TDD02').avgM}
+                    unit2="m"
+                    trend={getCombinedMetricData('TDD01', 'TDD02').trendPercent}
+                    trendType={getCombinedMetricData('TDD01', 'TDD02').trendType}
+                    status={getCombinedMetricData('TDD01', 'TDD02').status}
+                    statusColor={getCombinedMetricData('TDD01', 'TDD02').statusColor}
+                    iconColor="text-h-red"
+                  />
+                  <TrendCard 
+                    title="TEMPO DE PROCESSAMENTO (HORAS)"
+                    chartColor={getCombinedMetricData('TDD01', 'TDD02').chartColor}
+                    gradientId="gradient-red"
+                    calcValue={metrics['TDD01']?.[0] ? `${metrics['TDD01'][0].processing_time_hours}h ${metrics['TDD01'][0].processing_time_minutes}m` : "00h 00m"}
+                    postValue={metrics['TDD02']?.[0] ? `${metrics['TDD02'][0].processing_time_hours}h ${metrics['TDD02'][0].processing_time_minutes}m` : "00h 00m"}
+                    periods={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => m.period)}
+                    timeLabels={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => {
+                      const h = Math.floor(m.processing_time_seconds / 3600);
+                      const min = Math.floor((m.processing_time_seconds % 3600) / 60);
+                      return `${h}h ${min}m`;
+                    })}
+                    values={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
+                  />
+                </div>
+
+                {/* Column 4: Eliminação (EL001/EL002) */}
+                <div className="space-y-6">
+                  <MetricCard 
+                    title="Eliminação"
+                    subtitle="Eliminação"
+                    icon={ArrowLeftRight}
+                    realTimeValue={getCombinedMetricData('EL001', 'EL002').realH}
+                    realTimeUnit1="h"
+                    realTimeValue2={getCombinedMetricData('EL001', 'EL002').realM}
+                    realTimeUnit2="m"
+                    value={getCombinedMetricData('EL001', 'EL002').avgH}
+                    unit1="h"
+                    value2={getCombinedMetricData('EL001', 'EL002').avgM}
+                    unit2="m"
+                    trend={getCombinedMetricData('EL001', 'EL002').trendPercent}
+                    trendType={getCombinedMetricData('EL001', 'EL002').trendType}
+                    status={getCombinedMetricData('EL001', 'EL002').status}
+                    statusColor={getCombinedMetricData('EL001', 'EL002').statusColor}
+                    iconColor="text-h-green"
+                  />
+                  <TrendCard 
+                    title="TEMPO DE PROCESSAMENTO (HORAS)"
+                    chartColor={getCombinedMetricData('EL001', 'EL002').chartColor}
+                    gradientId="gradient-green-3"
+                    calcValue={metrics['EL001']?.[0] ? `${metrics['EL001'][0].processing_time_hours}h ${metrics['EL001'][0].processing_time_minutes}m` : "00h 00m"}
+                    postValue={metrics['EL002']?.[0] ? `${metrics['EL002'][0].processing_time_hours}h ${metrics['EL002'][0].processing_time_minutes}m` : "00h 00m"}
+                    periods={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => m.period)}
+                    timeLabels={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => {
+                      const h = Math.floor(m.processing_time_seconds / 3600);
+                      const min = Math.floor((m.processing_time_seconds % 3600) / 60);
+                      return `${h}h ${min}m`;
+                    })}
+                    values={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <UsersView currentUserRole={user.role} />
           )}
 
-          <div className="mb-10 flex flex-col lg:flex-row justify-between items-start lg:items-end gap-6">
-            <div className="w-full lg:w-auto">
-              <h2 className="text-xl sm:text-2xl font-bold text-h-text-dark tracking-tight">Análise de Performance de Processos</h2>
-              <p className="text-h-text-muted text-sm mt-1">Monitoramento de JOBs Managerial</p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto items-center">
-              {/* Single Period Filter */}
-              <SinglePeriodFilter onPeriodChange={handlePeriodChange} />
-
-              <button 
-                onClick={handleRefresh}
-                className="w-full sm:w-auto bg-h-green text-white px-5 py-2.5 rounded-full text-xs font-bold flex items-center justify-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
-              >
-                <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                ATUALIZAR DADOS
-              </button>
-            </div>
-          </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-8">
-          {/* Column 1: Cross Allocation - Tax Incentives (CA001/CA002) */}
-          <div className="space-y-6">
-            <MetricCard 
-              title="Cross Allocation"
-              subtitle="Tax Incentives e ATL/BTL"
-              icon={Network}
-              realTimeValue={getCombinedMetricData('CA001', 'CA002').realH}
-              realTimeUnit1="h"
-              realTimeValue2={getCombinedMetricData('CA001', 'CA002').realM}
-              realTimeUnit2="m"
-              value={getCombinedMetricData('CA001', 'CA002').avgH}
-              unit1="h"
-              value2={getCombinedMetricData('CA001', 'CA002').avgM}
-              unit2="m"
-              trend={getCombinedMetricData('CA001', 'CA002').trendPercent}
-              trendType={getCombinedMetricData('CA001', 'CA002').trendType}
-              status={getCombinedMetricData('CA001', 'CA002').status}
-              statusColor={getCombinedMetricData('CA001', 'CA002').statusColor}
-              iconColor="text-h-green"
-            />
-            <TrendCard 
-              title="TEMPO DE PROCESSAMENTO (HORAS)"
-              chartColor={getCombinedMetricData('CA001', 'CA002').chartColor}
-              gradientId="gradient-green-1"
-              calcValue={metrics['CA001']?.[0] ? `${metrics['CA001'][0].processing_time_hours}h ${metrics['CA001'][0].processing_time_minutes}m` : "00h 00m"}
-              postValue={metrics['CA002']?.[0] ? `${metrics['CA002'][0].processing_time_hours}h ${metrics['CA002'][0].processing_time_minutes}m` : "00h 00m"}
-              periods={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => m.period)}
-              timeLabels={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => {
-                const h = Math.floor(m.processing_time_seconds / 3600);
-                const min = Math.floor((m.processing_time_seconds % 3600) / 60);
-                return `${h}h ${min}m`;
-              })}
-              values={getCombinedMetricData('CA001', 'CA002').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
-            />
-          </div>
-
-          {/* Column 2: Cross Allocation - PL30 e EIA (CA003/CA004) */}
-          <div className="space-y-6">
-            <MetricCard 
-              title="Cross Allocation"
-              subtitle="PL30 e EIA"
-              icon={Network}
-              realTimeValue={getCombinedMetricData('CA003', 'CA004').realH}
-              realTimeUnit1="h"
-              realTimeValue2={getCombinedMetricData('CA003', 'CA004').realM}
-              realTimeUnit2="m"
-              value={getCombinedMetricData('CA003', 'CA004').avgH}
-              unit1="h"
-              value2={getCombinedMetricData('CA003', 'CA004').avgM}
-              unit2="m"
-              trend={getCombinedMetricData('CA003', 'CA004').trendPercent}
-              trendType={getCombinedMetricData('CA003', 'CA004').trendType}
-              status={getCombinedMetricData('CA003', 'CA004').status}
-              statusColor={getCombinedMetricData('CA003', 'CA004').statusColor}
-              iconColor="text-h-green"
-            />
-            <TrendCard 
-              title="TEMPO DE PROCESSAMENTO (HORAS)"
-              chartColor={getCombinedMetricData('CA003', 'CA004').chartColor}
-              gradientId="gradient-green-2"
-              calcValue={metrics['CA003']?.[0] ? `${metrics['CA003'][0].processing_time_hours}h ${metrics['CA003'][0].processing_time_minutes}m` : "00h 00m"}
-              postValue={metrics['CA004']?.[0] ? `${metrics['CA004'][0].processing_time_hours}h ${metrics['CA004'][0].processing_time_minutes}m` : "00h 00m"}
-              periods={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => m.period)}
-              timeLabels={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => {
-                const h = Math.floor(m.processing_time_seconds / 3600);
-                const min = Math.floor((m.processing_time_seconds % 3600) / 60);
-                return `${h}h ${min}m`;
-              })}
-              values={getCombinedMetricData('CA003', 'CA004').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
-            />
-          </div>
-
-          {/* Column 3: TDD (TDD01/TDD02) */}
-          <div className="space-y-6">
-            <MetricCard 
-              title="TDD"
-              subtitle="TDD"
-              icon={BarChart3}
-              realTimeValue={getCombinedMetricData('TDD01', 'TDD02').realH}
-              realTimeUnit1="h"
-              realTimeValue2={getCombinedMetricData('TDD01', 'TDD02').realM}
-              realTimeUnit2="m"
-              value={getCombinedMetricData('TDD01', 'TDD02').avgH}
-              unit1="h"
-              value2={getCombinedMetricData('TDD01', 'TDD02').avgM}
-              unit2="m"
-              trend={getCombinedMetricData('TDD01', 'TDD02').trendPercent}
-              trendType={getCombinedMetricData('TDD01', 'TDD02').trendType}
-              status={getCombinedMetricData('TDD01', 'TDD02').status}
-              statusColor={getCombinedMetricData('TDD01', 'TDD02').statusColor}
-              iconColor="text-h-red"
-            />
-            <TrendCard 
-              title="TEMPO DE PROCESSAMENTO (HORAS)"
-              chartColor={getCombinedMetricData('TDD01', 'TDD02').chartColor}
-              gradientId="gradient-red"
-              calcValue={metrics['TDD01']?.[0] ? `${metrics['TDD01'][0].processing_time_hours}h ${metrics['TDD01'][0].processing_time_minutes}m` : "00h 00m"}
-              postValue={metrics['TDD02']?.[0] ? `${metrics['TDD02'][0].processing_time_hours}h ${metrics['TDD02'][0].processing_time_minutes}m` : "00h 00m"}
-              periods={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => m.period)}
-              timeLabels={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => {
-                const h = Math.floor(m.processing_time_seconds / 3600);
-                const min = Math.floor((m.processing_time_seconds % 3600) / 60);
-                return `${h}h ${min}m`;
-              })}
-              values={getCombinedMetricData('TDD01', 'TDD02').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
-            />
-          </div>
-
-          {/* Column 4: Eliminação (EL001/EL002) */}
-          <div className="space-y-6">
-            <MetricCard 
-              title="Eliminação"
-              subtitle="Eliminação"
-              icon={ArrowLeftRight}
-              realTimeValue={getCombinedMetricData('EL001', 'EL002').realH}
-              realTimeUnit1="h"
-              realTimeValue2={getCombinedMetricData('EL001', 'EL002').realM}
-              realTimeUnit2="m"
-              value={getCombinedMetricData('EL001', 'EL002').avgH}
-              unit1="h"
-              value2={getCombinedMetricData('EL001', 'EL002').avgM}
-              unit2="m"
-              trend={getCombinedMetricData('EL001', 'EL002').trendPercent}
-              trendType={getCombinedMetricData('EL001', 'EL002').trendType}
-              status={getCombinedMetricData('EL001', 'EL002').status}
-              statusColor={getCombinedMetricData('EL001', 'EL002').statusColor}
-              iconColor="text-h-green"
-            />
-            <TrendCard 
-              title="TEMPO DE PROCESSAMENTO (HORAS)"
-              chartColor={getCombinedMetricData('EL001', 'EL002').chartColor}
-              gradientId="gradient-green-3"
-              calcValue={metrics['EL001']?.[0] ? `${metrics['EL001'][0].processing_time_hours}h ${metrics['EL001'][0].processing_time_minutes}m` : "00h 00m"}
-              postValue={metrics['EL002']?.[0] ? `${metrics['EL002'][0].processing_time_hours}h ${metrics['EL002'][0].processing_time_minutes}m` : "00h 00m"}
-              periods={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => m.period)}
-              timeLabels={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => {
-                const h = Math.floor(m.processing_time_seconds / 3600);
-                const min = Math.floor((m.processing_time_seconds % 3600) / 60);
-                return `${h}h ${min}m`;
-              })}
-              values={getCombinedMetricData('EL001', 'EL002').combinedData.slice(0, 3).reverse().map(m => m.processing_time_seconds / 3600)}
-            />
-          </div>
-        </div>
-
-        <Footer lastUpdate={lastUpdate} />
+          <Footer lastUpdate={lastUpdate} />
         </main>
       </div>
     </div>

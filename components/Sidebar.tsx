@@ -14,9 +14,10 @@ interface SidebarProps {
   isCollapsed: boolean;
   setIsCollapsed: (value: boolean) => void;
   activeItem: string;
+  onItemClick: (id: string) => void;
 }
 
-export function Sidebar({ isCollapsed, setIsCollapsed, activeItem }: SidebarProps) {
+export function Sidebar({ isCollapsed, setIsCollapsed, activeItem, onItemClick }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Managerial Dashboard', icon: LayoutDashboard },
     { id: 'users', label: 'Usuários', icon: Users },
@@ -54,6 +55,7 @@ export function Sidebar({ isCollapsed, setIsCollapsed, activeItem }: SidebarProp
           return (
             <button
               key={item.id}
+              onClick={() => onItemClick(item.id)}
               className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all group relative ${
                 isActive 
                   ? 'bg-h-green text-white shadow-lg shadow-h-green/20' 
