@@ -25,14 +25,41 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-  const isAdmin = currentUserRole === 'admin';
+  const [isAdminFromList, setIsAdminFromList] = useState(false);
+  const effectiveIsAdmin = (currentUserRole?.toLowerCase() === 'admin') || isAdminFromList;
 
   const fetchUsers = React.useCallback(async () => {
     const { data, error } = await supabase.from('profiles').select('*').order('full_name');
     if (error) {
-      console.error('Error fetching users:', error);
+      console.error('Error fetching users:', {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code
+      });
+      
+      if (error.code === '42P01') {
+        setMessage({ 
+          text: 'A tabela "profiles" não foi encontrada. Certifique-se de executar as migrations no Supabase SQL Editor.', 
+          type: 'error' 
+        });
+      } else {
+        setMessage({ 
+          text: 'Erro ao carregar usuários: ' + error.message, 
+          type: 'error' 
+        });
+      }
     } else {
-      setUsers(data || []);
+      const fetchedUsers = data || [];
+      setUsers(fetchedUsers);
+      
+      // Fallback: Se o cargo passado por prop for 'user', mas na lista este usuário for 'admin',
+      // podemos confiar na lista que acabou de vir do banco.
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentProfile = fetchedUsers.find(u => u.id === session?.user?.id);
+      if (currentProfile?.role?.toLowerCase() === 'admin') {
+        setIsAdminFromList(true);
+      }
     }
     setIsLoading(false);
   }, []);
@@ -96,7 +123,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
           <h2 className="text-2xl font-bold text-h-text-dark tracking-tight">Gestão de Usuários</h2>
           <p className="text-h-text-muted text-sm mt-1">Visualize e gerencie as permissões de acesso</p>
         </div>
-        {isAdmin && (
+        {effectiveIsAdmin && (
           <button 
             onClick={() => setIsAdding(true)}
             className="bg-h-green text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
@@ -107,7 +134,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
         )}
       </div>
 
-      {!isAdmin && (
+      {!effectiveIsAdmin && (
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-800 text-sm">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <div>
@@ -196,7 +223,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {isAdmin && (
+                      {effectiveIsAdmin && (
                         <div className="flex items-center gap-2">
                           {isEditing === user.id ? (
                             <>

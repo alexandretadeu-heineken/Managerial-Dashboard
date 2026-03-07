@@ -27,15 +27,21 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === 'users' && user.id) {
+      console.log('Sincronizando cargo para a aba de usuários...');
       const refreshRole = async () => {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        if (profile && profile.role !== user.role) {
-          setUser(prev => ({ ...prev, role: profile.role || 'user' }));
+        if (profile) {
+          console.log('Cargo no banco:', profile.role, 'Cargo local:', user.role);
+          if (profile.role !== user.role) {
+            console.log('Atualizando cargo local para:', profile.role);
+            setUser(prev => ({ ...prev, role: profile.role || 'user' }));
+          }
         }
       };
       refreshRole();
     }
   }, [activeTab, user.id, user.role]);
+
   const [isInitializing, setIsInitializing] = useState(true);
   const [metrics, setMetrics] = useState<Record<string, ProcessMetric[]>>({});
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
@@ -58,40 +64,6 @@ export default function DashboardPage() {
     loadMetrics(period);
   }, []);
 
-  useEffect(() => {
-    if (authState === 'authenticated') {
-      // loadMetrics is now called by handlePeriodChange on mount
-    }
-  }, [authState]);
-
-  useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          await handleLogin(session.user.email || '', session.user.id);
-        }
-      } catch (error) {
-        console.error('Session check error:', error);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    checkSession();
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        await handleLogin(session.user.email || '', session.user.id);
-      } else {
-        setAuthState('login');
-        setUser({ name: '', email: '', role: 'user', id: '' });
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadMetrics(currentPeriod);
@@ -99,7 +71,6 @@ export default function DashboardPage() {
   };
 
   const handleLogin = async (email: string, userId?: string) => {
-    // Extract name from email (e.g., "john.doe@heineken.com" -> "John Doe")
     const namePart = email.split('@')[0];
     const name = namePart
       .split('.')
@@ -108,38 +79,58 @@ export default function DashboardPage() {
     
     let role = 'user';
     if (userId) {
-      console.log('Verificando cargo para o usuário:', userId);
-      const { data: profile, error } = await supabase.from('profiles').select('role').eq('id', userId).single();
-      
-      if (error && error.code === 'PGRST116') {
-        console.log('Perfil não encontrado, tentando criar...');
-        const { data: newProfile } = await supabase.from('profiles').insert([
-          { id: userId, email, full_name: name, role: email === 'atacomp.heineken@gmail.com' ? 'admin' : 'user' }
-        ]).select('role').single();
-        if (newProfile) role = newProfile.role || 'user';
-      } else if (profile) {
-        role = profile.role || 'user';
+      try {
+        const { data: profile } = await supabase.from('profiles').select('role').eq('id', userId).single();
+        if (profile) {
+          role = profile.role || 'user';
+        }
+      } catch (e) {
+        console.error('Erro ao buscar cargo:', e);
       }
       
-      // Override de segurança para o proprietário
       if (email === 'atacomp.heineken@gmail.com') {
         role = 'admin';
       }
-      
-      console.log('Cargo identificado:', role);
     }
     
     setUser({ name, email, role, id: userId || '' });
     setAuthState('authenticated');
+    setIsInitializing(false);
   };
 
+  useEffect(() => {
+    // Gerenciador único de estado de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await handleLogin(session.user.email || '', session.user.id);
+      } else if (event === 'SIGNED_OUT' || !session) {
+        setAuthState('login');
+        setUser({ name: '', email: '', role: 'user', id: '' });
+        setIsInitializing(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
   const handleLogout = async () => {
+    console.log('Iniciando logout...');
     try {
-      await supabase.auth.signOut();
+      // Limpa o estado local IMEDIATAMENTE para dar feedback visual instantâneo
       setUser({ name: '', email: '', role: 'user', id: '' });
       setAuthState('login');
+      setActiveTab('dashboard');
+      
+      // Tenta deslogar do servidor, mas não bloqueia a UI se falhar
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('Erro ao deslogar do Supabase (servidor):', error);
+      }
+      
+      console.log('Logout concluído com sucesso.');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Exceção durante o logout:', error);
+      // Garante que o usuário volte para o login mesmo em caso de erro grave
+      window.location.reload();
     }
   };
   const handleForgotPassword = () => setAuthState('forgot-password');
