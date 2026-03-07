@@ -34,7 +34,7 @@ export function LoginForm({ onLogin, onForgotPassword }: LoginFormProps) {
           <Star className="h-8 w-8 text-white fill-current" />
         </div>
         <h1 className="text-2xl font-bold text-h-text-dark">Bem-vindo de volta</h1>
-        <p className="text-h-text-muted text-sm mt-1">Acesse o Managerial Dashboard</p>
+        <p className="text-h-text-muted text-sm mt-1">Acesse D&T AMS Dashboards</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
@@ -50,7 +50,7 @@ export function LoginForm({ onLogin, onForgotPassword }: LoginFormProps) {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-h-gray-bg border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-h-green/20 focus:border-h-green transition-all"
-              placeholder="seu.nome@heineken.com"
+              placeholder="seu.email@heineken.com.br"
             />
           </div>
         </div>
@@ -99,7 +99,7 @@ export function LoginForm({ onLogin, onForgotPassword }: LoginFormProps) {
 
       <div className="mt-8 pt-6 border-t border-gray-100 text-center">
         <p className="text-xs text-h-text-muted">
-          Problemas com o acesso? <span className="text-h-green font-bold cursor-pointer">Suporte D&T</span>
+          Problemas com o acesso? <a href="https://nextgen.service-now.com/esc_it" target="_blank" rel="noopener noreferrer" className="text-h-green font-bold hover:underline">Suporte D&T</a>
         </p>
       </div>
     </motion.div>
