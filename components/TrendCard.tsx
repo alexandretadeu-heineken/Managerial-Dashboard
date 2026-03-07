@@ -6,21 +6,36 @@ import { motion } from 'motion/react';
 
 interface TrendCardProps {
   title: string;
-  chartPath: string;
   chartColor: string;
   gradientId: string;
   calcValue: string;
   postValue: string;
+  periods?: string[]; // Array of 3 periods, e.g., ['12/2025', '01/2026', '02/2026']
+  values?: number[];  // Array of 3 values (seconds or hours)
 }
 
 export function TrendCard({
   title,
-  chartPath,
   chartColor,
   gradientId,
   calcValue,
-  postValue
+  postValue,
+  periods = ['M1', 'M2', 'M3'],
+  values = [20, 15, 10]
 }: TrendCardProps) {
+  // Generate SVG path based on 3 values
+  // viewBox is 0 0 100 40
+  // x points: 0, 50, 100
+  // y points: inverted values (max value maps to 5, min to 35)
+  const maxVal = Math.max(...values, 1);
+  const getY = (val: number) => 35 - ((val / maxVal) * 30);
+  
+  const p1 = { x: 0, y: getY(values[0] || 0) };
+  const p2 = { x: 50, y: getY(values[1] || 0) };
+  const p3 = { x: 100, y: getY(values[2] || 0) };
+  
+  const dynamicPath = `M${p1.x},${p1.y} L${p2.x},${p2.y} L${p3.x},${p3.y}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -39,19 +54,21 @@ export function TrendCard({
           </defs>
           <path
             className="line-chart-svg"
-            d={chartPath}
+            d={dynamicPath}
             fill="none"
             stroke={chartColor}
             strokeWidth="2"
           />
           <path
-            d={`${chartPath} V40 H0 Z`}
+            d={`${dynamicPath} V40 H0 Z`}
             fill={`url(#${gradientId})`}
             opacity="0.1"
           />
         </svg>
-        <div className="flex justify-between mt-2 text-[9px] text-h-text-muted font-bold uppercase">
-          <span>Jan</span><span>Mar</span><span>Jun</span>
+        <div className="flex justify-between mt-2 text-[8px] text-h-text-muted font-bold uppercase">
+          {periods.map((p, i) => (
+            <span key={i}>{p}</span>
+          ))}
         </div>
       </div>
       <div className="grid grid-cols-1 xs:grid-cols-2 gap-4">
