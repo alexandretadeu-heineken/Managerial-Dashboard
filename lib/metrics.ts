@@ -85,3 +85,18 @@ export function groupMetricsByProcess(metrics: ProcessMetric[]) {
   
   return grouped;
 }
+
+export async function fetchLastUpdate() {
+  const { data, error } = await supabase
+    .from('process_metrics')
+    .select('created_at')
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error || !data || data.length === 0) {
+    console.error('Error fetching last update:', error);
+    return null;
+  }
+
+  return data[0].created_at;
+}

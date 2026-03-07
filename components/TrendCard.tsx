@@ -11,6 +11,7 @@ interface TrendCardProps {
   calcValue: string;
   postValue: string;
   periods?: string[]; // Array of 3 periods, e.g., ['12/2025', '01/2026', '02/2026']
+  timeLabels?: string[]; // Array of 3 time labels, e.g., ['1h 35m', '2h 15m', '2h 05m']
   values?: number[];  // Array of 3 values (seconds or hours)
 }
 
@@ -21,6 +22,7 @@ export function TrendCard({
   calcValue,
   postValue,
   periods = ['M1', 'M2', 'M3'],
+  timeLabels = [],
   values = [20, 15, 10]
 }: TrendCardProps) {
   // Generate SVG path based on 3 values
@@ -67,7 +69,10 @@ export function TrendCard({
         </svg>
         <div className="flex justify-between mt-2 text-[8px] text-h-text-muted font-bold uppercase">
           {periods.map((p, i) => (
-            <span key={i}>{p}</span>
+            <div key={i} className="flex flex-col items-center">
+              <span>{p}</span>
+              {timeLabels[i] && <span className="mt-0.5">{timeLabels[i]}</span>}
+            </div>
           ))}
         </div>
       </div>
