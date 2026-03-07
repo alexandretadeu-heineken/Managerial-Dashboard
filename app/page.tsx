@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { Sidebar } from '@/components/Sidebar';
 import { DateFilter } from '@/components/DateFilter';
@@ -10,8 +10,9 @@ import { Footer } from '@/components/Footer';
 import { LoginForm } from '@/components/auth/LoginForm';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
-import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight } from 'lucide-react';
+import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight, Loader2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { supabase } from '@/lib/supabase';
 
 type AuthState = 'login' | 'forgot-password' | 'change-password' | 'authenticated';
 
@@ -21,6 +22,35 @@ export default function DashboardPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [isInitializing, setIsInitializing] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          handleLogin(session.user.email || '');
+        }
+      } catch (error) {
+        console.error('Session check error:', error);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        handleLogin(session.user.email || '');
+      } else {
+        setAuthState('login');
+        setUser({ name: '', email: '' });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
@@ -39,13 +69,26 @@ export default function DashboardPage() {
     setAuthState('authenticated');
   };
 
-  const handleLogout = () => {
-    setUser({ name: '', email: '' });
-    setAuthState('login');
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setUser({ name: '', email: '' });
+      setAuthState('login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
   const handleForgotPassword = () => setAuthState('forgot-password');
   const handleChangePassword = () => setAuthState('change-password');
   const handleBackToLogin = () => setAuthState('login');
+
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-h-gray-bg">
+        <Loader2 className="h-8 w-8 text-h-green animate-spin" />
+      </div>
+    );
+  }
 
   if (authState !== 'authenticated') {
     return (
