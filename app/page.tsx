@@ -27,21 +27,15 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (activeTab === 'users' && user.id) {
-      console.log('Sincronizando cargo para a aba de usuários...');
       const refreshRole = async () => {
         const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
-        if (profile) {
-          console.log('Cargo no banco:', profile.role, 'Cargo local:', user.role);
-          if (profile.role !== user.role) {
-            console.log('Atualizando cargo local para:', profile.role);
-            setUser(prev => ({ ...prev, role: profile.role || 'user' }));
-          }
+        if (profile && profile.role !== user.role) {
+          setUser(prev => ({ ...prev, role: profile.role || 'user' }));
         }
       };
       refreshRole();
     }
   }, [activeTab, user.id, user.role]);
-
   const [isInitializing, setIsInitializing] = useState(true);
   const [metrics, setMetrics] = useState<Record<string, ProcessMetric[]>>({});
   const [isLoadingMetrics, setIsLoadingMetrics] = useState(false);
@@ -64,6 +58,27 @@ export default function DashboardPage() {
     loadMetrics(period);
   }, []);
 
+  useEffect(() => {
+    if (authState === 'authenticated') {
+      // loadMetrics is now called by handlePeriodChange on mount
+    }
+  }, [authState]);
+
+  useEffect(() => {
+    // Gerenciador único de estado de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await handleLogin(session.user.email || '', session.user.id);
+      } else if (event === 'SIGNED_OUT' || !session) {
+        setAuthState('login');
+        setUser({ name: '', email: '', role: 'user', id: '' });
+        setIsInitializing(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await loadMetrics(currentPeriod);
@@ -71,6 +86,9 @@ export default function DashboardPage() {
   };
 
   const handleLogin = async (email: string, userId?: string) => {
+    // Evita processar se já estiver logado com o mesmo ID
+    if (user.id === userId && authState === 'authenticated') return;
+
     const namePart = email.split('@')[0];
     const name = namePart
       .split('.')
@@ -98,20 +116,6 @@ export default function DashboardPage() {
     setIsInitializing(false);
   };
 
-  useEffect(() => {
-    // Gerenciador único de estado de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await handleLogin(session.user.email || '', session.user.id);
-      } else if (event === 'SIGNED_OUT' || !session) {
-        setAuthState('login');
-        setUser({ name: '', email: '', role: 'user', id: '' });
-        setIsInitializing(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
   const handleLogout = async () => {
     console.log('Iniciando logout...');
     try {

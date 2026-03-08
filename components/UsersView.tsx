@@ -25,8 +25,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-  const [isAdminFromList, setIsAdminFromList] = useState(false);
-  const effectiveIsAdmin = (currentUserRole?.toLowerCase() === 'admin') || isAdminFromList;
+  const isAdmin = currentUserRole === 'admin';
 
   const fetchUsers = React.useCallback(async () => {
     const { data, error } = await supabase.from('profiles').select('*').order('full_name');
@@ -50,16 +49,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
         });
       }
     } else {
-      const fetchedUsers = data || [];
-      setUsers(fetchedUsers);
-      
-      // Fallback: Se o cargo passado por prop for 'user', mas na lista este usuário for 'admin',
-      // podemos confiar na lista que acabou de vir do banco.
-      const { data: { session } } = await supabase.auth.getSession();
-      const currentProfile = fetchedUsers.find(u => u.id === session?.user?.id);
-      if (currentProfile?.role?.toLowerCase() === 'admin') {
-        setIsAdminFromList(true);
-      }
+      setUsers(data || []);
     }
     setIsLoading(false);
   }, []);
@@ -123,7 +113,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
           <h2 className="text-2xl font-bold text-h-text-dark tracking-tight">Gestão de Usuários</h2>
           <p className="text-h-text-muted text-sm mt-1">Visualize e gerencie as permissões de acesso</p>
         </div>
-        {effectiveIsAdmin && (
+        {isAdmin && (
           <button 
             onClick={() => setIsAdding(true)}
             className="bg-h-green text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
@@ -134,7 +124,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
         )}
       </div>
 
-      {!effectiveIsAdmin && (
+      {!isAdmin && (
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-800 text-sm">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <div>
@@ -223,7 +213,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {effectiveIsAdmin && (
+                      {isAdmin && (
                         <div className="flex items-center gap-2">
                           {isEditing === user.id ? (
                             <>
