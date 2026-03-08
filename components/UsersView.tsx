@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { User, Edit2, Trash2, Plus, Loader2, Shield, Mail, Check, X, AlertCircle } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+import { User, Edit2, Trash2, Plus, Loader2, Shield, Mail, Check, X, AlertCircle, Key } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 interface Profile {
@@ -23,9 +24,12 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ full_name: '', role: '' });
   const [isAdding, setIsAdding] = useState(false);
+  const [addForm, setAddForm] = useState({ full_name: '', email: '', password: '', role: 'user' });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<{ text: string, type: 'success' | 'error' } | null>(null);
 
-  const isAdmin = currentUserRole === 'admin';
+  const [isAdminFromList, setIsAdminFromList] = useState(false);
+  const effectiveIsAdmin = (currentUserRole?.toLowerCase() === 'admin') || isAdminFromList;
 
   const fetchUsers = React.useCallback(async () => {
     const { data, error } = await supabase.from('profiles').select('*').order('full_name');
@@ -49,13 +53,21 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
         });
       }
     } else {
-      setUsers(data || []);
+      const fetchedUsers = data || [];
+      setUsers(fetchedUsers);
+      
+      // Fallback: Se o cargo passado por prop for 'user', mas na lista este usuário for 'admin',
+      // podemos confiar na lista que acabou de vir do banco.
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentProfile = fetchedUsers.find(u => u.id === session?.user?.id);
+      if (currentProfile?.role?.toLowerCase() === 'admin') {
+        setIsAdminFromList(true);
+      }
     }
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchUsers();
   }, [fetchUsers]);
 
@@ -98,6 +110,78 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
     setTimeout(() => setMessage(null), 3000);
   };
 
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!addForm.email || !addForm.password || !addForm.full_name) {
+      setMessage({ text: 'Por favor, preencha todos os campos.', type: 'error' });
+      return;
+    }
+
+    setIsSubmitting(true);
+    
+    try {
+      // 1. Create a temporary client to sign up without logging out the admin
+      const tempSupabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { auth: { persistSession: false } }
+      );
+
+      // 2. Sign up the user
+      const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+        email: addForm.email,
+        password: addForm.password,
+        options: {
+          data: {
+            full_name: addForm.full_name,
+          }
+        }
+      });
+
+      if (authError) throw authError;
+
+      if (authData.user) {
+        // 3. Update the profile with the correct role
+        // The trigger usually creates the profile, but we want to ensure the role is correct
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({ 
+            role: addForm.role, 
+            full_name: addForm.full_name,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', authData.user.id);
+
+        if (profileError) {
+          // If update fails, maybe the profile wasn't created yet by the trigger?
+          // Let's try to upsert instead
+          const { error: upsertError } = await supabase
+            .from('profiles')
+            .upsert({
+              id: authData.user.id,
+              email: addForm.email,
+              full_name: addForm.full_name,
+              role: addForm.role,
+              updated_at: new Date().toISOString()
+            });
+          
+          if (upsertError) throw upsertError;
+        }
+
+        setMessage({ text: 'Usuário criado com sucesso!', type: 'success' });
+        setIsAdding(false);
+        setAddForm({ full_name: '', email: '', password: '', role: 'user' });
+        fetchUsers();
+      }
+    } catch (error: any) {
+      console.error('Erro ao criar usuário:', error);
+      setMessage({ text: 'Erro ao criar usuário: ' + (error.message || 'Erro desconhecido'), type: 'error' });
+    } finally {
+      setIsSubmitting(false);
+      setTimeout(() => setMessage(null), 5000);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -113,7 +197,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
           <h2 className="text-2xl font-bold text-h-text-dark tracking-tight">Gestão de Usuários</h2>
           <p className="text-h-text-muted text-sm mt-1">Visualize e gerencie as permissões de acesso</p>
         </div>
-        {isAdmin && (
+        {effectiveIsAdmin && (
           <button 
             onClick={() => setIsAdding(true)}
             className="bg-h-green text-white px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
@@ -124,7 +208,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
         )}
       </div>
 
-      {!isAdmin && (
+      {!effectiveIsAdmin && (
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3 text-amber-800 text-sm">
           <AlertCircle className="h-5 w-5 shrink-0" />
           <div>
@@ -213,7 +297,7 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
                       )}
                     </td>
                     <td className="px-6 py-4">
-                      {isAdmin && (
+                      {effectiveIsAdmin && (
                         <div className="flex items-center gap-2">
                           {isEditing === user.id ? (
                             <>
@@ -270,29 +354,92 @@ export function UsersView({ currentUserRole }: UsersViewProps) {
           >
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold text-h-text-dark">Adicionar Usuário</h3>
-              <button onClick={() => setIsAdding(false)} className="text-h-text-muted hover:text-h-text-dark">
+              <button onClick={() => setIsAdding(false)} className="text-h-text-muted hover:text-h-text-dark transition-colors">
                 <X size={24} />
               </button>
             </div>
-            <div className="space-y-4 mb-6">
-              <p className="text-sm text-h-text-muted">
-                Para adicionar um novo usuário ao sistema, ele deve primeiro realizar o cadastro na tela de login.
-              </p>
-              <div className="p-4 bg-h-gray-bg rounded-xl border border-gray-100">
-                <p className="text-xs font-bold text-h-text-dark uppercase mb-2">Fluxo de Cadastro:</p>
-                <ol className="text-xs text-h-text-muted space-y-2 list-decimal ml-4">
-                  <li>O novo usuário acessa a tela de login e clica em &quot;Cadastrar&quot;.</li>
-                  <li>Após o cadastro, o perfil dele aparecerá automaticamente nesta lista.</li>
-                  <li>Como Administrador, você poderá então alterar o cargo dele para &quot;Admin&quot; se necessário.</li>
-                </ol>
+            
+            <form onSubmit={handleCreate} className="space-y-4">
+              <div>
+                <label className="block text-[10px] font-black text-h-text-muted uppercase tracking-widest mb-1.5">Nome Completo</label>
+                <div className="relative">
+                  <User className="absolute left-3 top-1/2 -translate-y-1/2 text-h-text-muted" size={16} />
+                  <input 
+                    type="text" 
+                    required
+                    placeholder="Ex: João Silva"
+                    value={addForm.full_name}
+                    onChange={(e) => setAddForm({ ...addForm, full_name: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-h-green/20 focus:border-h-green outline-none transition-all"
+                  />
+                </div>
               </div>
-            </div>
-            <button 
-              onClick={() => setIsAdding(false)}
-              className="w-full bg-h-green text-white py-3 rounded-xl font-bold hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20"
-            >
-              ENTENDI
-            </button>
+
+              <div>
+                <label className="block text-[10px] font-black text-h-text-muted uppercase tracking-widest mb-1.5">Email</label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-h-text-muted" size={16} />
+                  <input 
+                    type="email" 
+                    required
+                    placeholder="email@exemplo.com"
+                    value={addForm.email}
+                    onChange={(e) => setAddForm({ ...addForm, email: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-h-green/20 focus:border-h-green outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-h-text-muted uppercase tracking-widest mb-1.5">Senha Inicial</label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-h-text-muted" size={16} />
+                  <input 
+                    type="password" 
+                    required
+                    placeholder="••••••••"
+                    value={addForm.password}
+                    onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-h-green/20 focus:border-h-green outline-none transition-all"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-h-text-muted uppercase tracking-widest mb-1.5">Cargo</label>
+                <div className="relative">
+                  <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-h-text-muted" size={16} />
+                  <select 
+                    value={addForm.role}
+                    onChange={(e) => setAddForm({ ...addForm, role: e.target.value })}
+                    className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-h-green/20 focus:border-h-green outline-none transition-all bg-white appearance-none"
+                  >
+                    <option value="user">Usuário</option>
+                    <option value="admin">Administrador</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="pt-4">
+                <button 
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="w-full bg-h-green text-white py-3 rounded-xl font-bold hover:bg-h-dark-green transition-all shadow-lg shadow-h-green/20 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      CRIANDO...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={18} />
+                      CRIAR USUÁRIO
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </motion.div>
         </div>
       )}

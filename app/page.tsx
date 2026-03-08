@@ -11,6 +11,7 @@ import { LoginForm } from '@/components/auth/LoginForm';
 import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { UsersView } from '@/components/UsersView';
+import { ManagerialJobsView } from '@/components/ManagerialJobsView';
 import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
@@ -64,28 +65,7 @@ export default function DashboardPage() {
     }
   }, [authState]);
 
-  useEffect(() => {
-    // Gerenciador único de estado de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        await handleLogin(session.user.email || '', session.user.id);
-      } else if (event === 'SIGNED_OUT' || !session) {
-        setAuthState('login');
-        setUser({ name: '', email: '', role: 'user', id: '' });
-        setIsInitializing(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await loadMetrics(currentPeriod);
-    setIsRefreshing(false);
-  };
-
-  const handleLogin = async (email: string, userId?: string) => {
+  const handleLogin = React.useCallback(async (email: string, userId?: string) => {
     // Evita processar se já estiver logado com o mesmo ID
     if (user.id === userId && authState === 'authenticated') return;
 
@@ -114,6 +94,27 @@ export default function DashboardPage() {
     setUser({ name, email, role, id: userId || '' });
     setAuthState('authenticated');
     setIsInitializing(false);
+  }, [user.id, authState]);
+
+  useEffect(() => {
+    // Gerenciador único de estado de autenticação
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        await handleLogin(session.user.email || '', session.user.id);
+      } else if (event === 'SIGNED_OUT' || !session) {
+        setAuthState('login');
+        setUser({ name: '', email: '', role: 'user', id: '' });
+        setIsInitializing(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [handleLogin]);
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await loadMetrics(currentPeriod);
+    setIsRefreshing(false);
   };
 
   const handleLogout = async () => {
@@ -519,6 +520,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </>
+          ) : activeTab === 'managerial-jobs' ? (
+            <ManagerialJobsView />
           ) : (
             <UsersView currentUserRole={user.role} />
           )}
