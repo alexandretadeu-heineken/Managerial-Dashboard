@@ -7,7 +7,8 @@ import {
   ChevronLeft, 
   ChevronRight,
   Menu,
-  Briefcase
+  Briefcase,
+  Clock
 } from 'lucide-react';
 import { motion } from 'motion/react';
 
@@ -21,6 +22,7 @@ interface SidebarProps {
 export function Sidebar({ isCollapsed, setIsCollapsed, activeItem, onItemClick }: SidebarProps) {
   const menuItems = [
     { id: 'dashboard', label: 'Managerial Dashboard', icon: LayoutDashboard },
+    { id: 'active-jobs', label: 'JOBs em andamento', icon: Clock },
     { id: 'managerial-jobs', label: 'Managerial JOBs', icon: Briefcase },
     { id: 'users', label: 'Usuários', icon: Users },
   ];

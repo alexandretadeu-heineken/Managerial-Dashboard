@@ -100,3 +100,36 @@ export async function fetchLastUpdate() {
 
   return data[0].created_at;
 }
+
+export async function fetchAverageProcessingTimes() {
+  const { data, error } = await supabase
+    .from('process_metrics')
+    .select('process_code, processing_time_seconds');
+
+  if (error) {
+    console.error('Error fetching average times:', error);
+    return {};
+  }
+
+  const averages: Record<string, number> = {};
+  const counts: Record<string, number> = {};
+
+  data.forEach(item => {
+    const code = item.process_code;
+    const time = item.processing_time_seconds;
+    
+    if (!averages[code]) {
+      averages[code] = 0;
+      counts[code] = 0;
+    }
+    
+    averages[code] += time;
+    counts[code] += 1;
+  });
+
+  Object.keys(averages).forEach(code => {
+    averages[code] = averages[code] / counts[code];
+  });
+
+  return averages;
+}

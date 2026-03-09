@@ -12,7 +12,8 @@ import { ForgotPasswordForm } from '@/components/auth/ForgotPasswordForm';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
 import { UsersView } from '@/components/UsersView';
 import { ManagerialJobsView } from '@/components/ManagerialJobsView';
-import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight, Loader2, AlertCircle } from 'lucide-react';
+import { ActiveJobsView } from '@/components/ActiveJobsView';
+import { Download, RefreshCw, Network, BarChart3, ArrowLeftRight, Loader2, AlertCircle, Clock } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
 import { fetchLatestMetrics, ProcessMetric, groupMetricsByProcess, fetchLastUpdate } from '@/lib/metrics';
@@ -520,6 +521,8 @@ export default function DashboardPage() {
                 </div>
               </div>
             </>
+          ) : activeTab === 'active-jobs' ? (
+            <ActiveJobsView />
           ) : activeTab === 'managerial-jobs' ? (
             <ManagerialJobsView />
           ) : (

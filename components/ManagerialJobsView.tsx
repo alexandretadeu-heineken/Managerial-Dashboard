@@ -11,17 +11,23 @@ import {
   CheckCircle2, 
   AlertCircle,
   ChevronRight,
-  Briefcase
+  Briefcase,
+  ChevronDown,
+  FileSpreadsheet,
+  FileText
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { supabase } from '@/lib/supabase';
 import { ProcessMetric } from '@/lib/metrics';
+import * as XLSX from 'xlsx';
 
 export function ManagerialJobsView() {
   const [jobs, setJobs] = useState<ProcessMetric[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [filterProcessCode, setFilterProcessCode] = useState('all');
+  const [showExportMenu, setShowExportMenu] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -30,6 +36,7 @@ export function ManagerialJobsView() {
       const { data, error } = await supabase
         .from('process_metrics')
         .select('*')
+        .order('process_code', { ascending: true })
         .order('reference_date', { ascending: false });
 
       if (isMounted) {
@@ -49,6 +56,8 @@ export function ManagerialJobsView() {
     };
   }, []);
 
+  const uniqueProcessCodes = Array.from(new Set(jobs.map(job => job.process_code))).sort();
+
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = 
       job.job_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -56,9 +65,66 @@ export function ManagerialJobsView() {
       job.responsible_name.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = filterStatus === 'all' || job.status.toLowerCase() === filterStatus.toLowerCase();
+    const matchesProcessCode = filterProcessCode === 'all' || job.process_code === filterProcessCode;
     
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesProcessCode;
   });
+
+  const exportToCSV = () => {
+    const headers = [
+      'ID', 'Código Processo', 'Descrição Processo', 'JOB', 'Período', 
+      'Data Início', 'Data Fim', 'Responsável', 'Duração (h)', 'Duração (m)', 'Status'
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      ...filteredJobs.map(job => [
+        job.id,
+        job.process_code,
+        `"${job.process_description.replace(/"/g, '""')}"`,
+        `"${job.job_name.replace(/"/g, '""')}"`,
+        job.period,
+        job.start_date,
+        job.end_date,
+        `"${job.responsible_name.replace(/"/g, '""')}"`,
+        job.processing_time_hours,
+        job.processing_time_minutes,
+        job.status
+      ].join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `managerial_jobs_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setShowExportMenu(false);
+  };
+
+  const exportToExcel = () => {
+    const data = filteredJobs.map(job => ({
+      'Código Processo': job.process_code,
+      'Descrição Processo': job.process_description,
+      'JOB': job.job_name,
+      'Período': job.period,
+      'Data Início': job.start_date,
+      'Data Fim': job.end_date,
+      'Responsável': job.responsible_name,
+      'Duração (h)': job.processing_time_hours,
+      'Duração (m)': job.processing_time_minutes,
+      'Status': job.status
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(data);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Jobs');
+    XLSX.writeFile(workbook, `managerial_jobs_${new Date().toISOString().split('T')[0]}.xlsx`);
+    setShowExportMenu(false);
+  };
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
@@ -94,6 +160,17 @@ export function ManagerialJobsView() {
           </div>
           
           <select
+            value={filterProcessCode}
+            onChange={(e) => setFilterProcessCode(e.target.value)}
+            className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-h-green/20 focus:border-h-green transition-all"
+          >
+            <option value="all">Todos os Processos</option>
+            {uniqueProcessCodes.map(code => (
+              <option key={code} value={code}>{code}</option>
+            ))}
+          </select>
+
+          <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-h-green/20 focus:border-h-green transition-all"
@@ -103,10 +180,48 @@ export function ManagerialJobsView() {
             <option value="falha">Falha</option>
           </select>
 
-          <button className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-h-text-dark hover:bg-gray-50 transition-all">
-            <Download className="h-4 w-4" />
-            Exportar
-          </button>
+          <div className="relative">
+            <button 
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm font-bold text-h-text-dark hover:bg-gray-50 transition-all"
+            >
+              <Download className="h-4 w-4" />
+              Exportar
+              <ChevronDown className={`h-3 w-3 transition-transform ${showExportMenu ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+              {showExportMenu && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-10" 
+                    onClick={() => setShowExportMenu(false)}
+                  ></div>
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 10 }}
+                    className="absolute right-0 mt-2 w-48 bg-white rounded-xl border border-gray-200 shadow-xl z-20 py-2"
+                  >
+                    <button
+                      onClick={exportToExcel}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-h-text-dark hover:bg-h-gray-bg transition-colors"
+                    >
+                      <FileSpreadsheet className="h-4 w-4 text-h-green" />
+                      Excel (.xlsx)
+                    </button>
+                    <button
+                      onClick={exportToCSV}
+                      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-h-text-dark hover:bg-h-gray-bg transition-colors"
+                    >
+                      <FileText className="h-4 w-4 text-blue-500" />
+                      CSV (.csv)
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
 

@@ -1,4 +1,7 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* Force re-bundle to fix moduleId error */
 
 @theme {
   --color-h-green: #008248;
